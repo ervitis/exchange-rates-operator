@@ -1,0 +1,7 @@
+apiVersion: app.ervitis.nazobenkyo.dev/v1alpha1
+kind: ExchangeRateApp
+metadata:
+  name: exchangerateapp-sample
+spec:
+  # Add fields here
+  foo: bar

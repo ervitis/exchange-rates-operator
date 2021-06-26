@@ -1,0 +1,24 @@
+# permissions for end users to edit exchangerateapps.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: exchangerateapp-editor-role
+rules:
+- apiGroups:
+  - app.ervitis.nazobenkyo.dev
+  resources:
+  - exchangerateapps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - app.ervitis.nazobenkyo.dev
+  resources:
+  - exchangerateapps/status
+  verbs:
+  - get
