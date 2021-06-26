@@ -18,13 +18,12 @@ package controllers
 
 import (
 	"context"
+	"github.com/ervitis/exchange-rates-operator/internal/api/v1alpha1"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	appv1alpha1 "github.com/ervitis/exchange-rates-operator/api/v1alpha1"
 )
 
 // ExchangeRateAppReconciler reconciles a ExchangeRateApp object
@@ -57,6 +56,6 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 // SetupWithManager sets up the controller with the Manager.
 func (r *ExchangeRateAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&appv1alpha1.ExchangeRateApp{}).
+		For(&v1alpha1.ExchangeRateApp{}).
 		Complete(r)
 }

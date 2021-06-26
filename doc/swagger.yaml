@@ -1,0 +1,154 @@
+swagger: '2.0'
+info:
+  title: Fixer.io
+  description: Foreign Exchange Rates and Currency Conversion API fixer.io
+  version: '1.0'
+host: 'api.fixer.io'
+schemes:
+  - http
+  - https
+produces:
+  - application/json
+paths:
+  /latest:
+    get:
+      summary: Get the latest foreign exchange reference rates
+      description: Returns the latest foreign exchange reference rates. Rates are quoted against the Euro by default. Specify the symbols returned (default = all)
+      operationId: getLatest
+      tags:
+        - Rates
+      parameters:
+        - name: base
+          in: query
+          description: The base currency
+          type: string
+          required: false
+          default: EUR
+        - name: symbols
+          in: query
+          description: The exchange rates symbols returned
+          type: array
+          items:
+            type: string
+          collectionFormat: csv
+          required: false
+      responses:
+        200:
+          description: The foreign exchange reference rates
+          schema:
+            $ref: '#/definitions/Rates'
+        404:
+          description: The requested resource does not exist
+        101:
+          description: No API Key was specified or an invalid API Key was specified.
+        103:
+          description: The requested API endpoint does not exist.
+        104:
+          description: The maximum allowed API amount of monthly API requests has been reached.
+        105:
+          description: The current subscription plan does not support this API endpoint.
+        106:
+          description: The current request did not return any results.
+        102:
+          description: The account this API request is coming from is inactive.
+        201:
+          description: An invalid base currency has been entered.
+        202:
+          description: One or more invalid symbols have been specified.
+        301:
+          description: No date has been specified. [historical]
+        302:
+          description: An invalid date has been specified. [historical, convert]
+        403:
+          description: No or an invalid amount has been specified. [convert]
+        501:
+          description: No or an invalid timeframe has been specified. [timeseries]
+        502:
+          description: No or an invalid "start_date" has been specified. [timeseries, fluctuation]
+        503:
+          description: No or an invalid "end_date" has been specified. [timeseries, fluctuation]
+        504:
+          description: An invalid timeframe has been specified. [timeseries, fluctuation]
+        505:
+          description: The specified timeframe is too long, exceeding 365 days. [timeseries, fluctuation]
+  /{date}:
+    get:
+      summary: Get historical rates from a gived date
+      description: Returns the foreign exchange reference rates for an historical date. Rates are quoted against the Euro by default. Specify the symbols returned (default = all)
+      operationId: getByDate
+      tags:
+        - Rates
+      parameters:
+        - name: date
+          in: path
+          description: The given date
+          type: string
+          format: date
+          required: true
+        - name: base
+          in: query
+          description: The base currency
+          type: string
+          required: false
+          default: EUR
+        - name: symbols
+          in: query
+          description: The exchange rates symbols returned
+          type: array
+          items:
+            type: string
+          collectionFormat: csv
+          required: false
+      responses:
+        200:
+          description: The foreign exchange reference rates
+          schema:
+            $ref: '#/definitions/Rates'
+        404:
+          description: The requested resource does not exist
+        101:
+          description: No API Key was specified or an invalid API Key was specified.
+        103:
+          description: The requested API endpoint does not exist.
+        104:
+          description: The maximum allowed API amount of monthly API requests has been reached.
+        105:
+          description: The current subscription plan does not support this API endpoint.
+        106:
+          description: The current request did not return any results.
+        102:
+          description: The account this API request is coming from is inactive.
+        201:
+          description: An invalid base currency has been entered.
+        202:
+          description: One or more invalid symbols have been specified.
+        301:
+          description: No date has been specified. [historical]
+        302:
+          description: An invalid date has been specified. [historical, convert]
+        403:
+          description: No or an invalid amount has been specified. [convert]
+        501:
+          description: No or an invalid timeframe has been specified. [timeseries]
+        502:
+          description: No or an invalid "start_date" has been specified. [timeseries, fluctuation]
+        503:
+          description: No or an invalid "end_date" has been specified. [timeseries, fluctuation]
+        504:
+          description: An invalid timeframe has been specified. [timeseries, fluctuation]
+        505:
+          description: The specified timeframe is too long, exceeding 365 days. [timeseries, fluctuation]
+definitions:
+  Rates:
+    type: object
+    properties:
+      base:
+        type: string
+      date:
+        type: string
+        format: string
+      rates:
+        type: object
+        additionalProperties:
+          type: number
+          format: double

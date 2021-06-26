@@ -28,14 +28,17 @@ type ExchangeRateAppSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of ExchangeRateApp. Edit exchangerateapp_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	URL          string `json:"url"`
+	APIVersion   string `json:"api_version"`
+	APIAccessKey string `json:"api_access_key"`
 }
 
 // ExchangeRateAppStatus defines the observed state of ExchangeRateApp
 type ExchangeRateAppStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	Nodes []string `json:"nodes"`
 }
 
 //+kubebuilder:object:root=true
