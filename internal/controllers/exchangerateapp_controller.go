@@ -18,7 +18,10 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"github.com/ervitis/exchange-rates-operator/internal/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -32,13 +35,16 @@ type ExchangeRateAppReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+const (
+	exchangerateAppFinalizer = "finalizer.exchangerate.nazobenkyou.dev"
+)
+
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=exchangerateapps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=exchangerateapps/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=exchangerateapps/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
 // the ExchangeRateApp object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
@@ -46,11 +52,57 @@ type ExchangeRateAppReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	lg := log.FromContext(ctx).WithName("exchangeRateApp")
 
-	// your logic here
+	instance := &v1alpha1.ExchangeRateApp{}
+
+	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, instance); err != nil {
+		if errors.IsNotFound(err) {
+			lg.Info("instance not found")
+			return ctrl.Result{}, err
+		}
+		lg.Error(err, "error getting instance")
+		return ctrl.Result{}, returnWrappedError("error getting instance", err)
+	}
+
+	if r.isMarkedToBeDeleted(instance) {
+		// TODO finalize client
+
+		instance.SetFinalizers([]string{exchangerateAppFinalizer})
+		if err := r.Update(ctx, instance); err != nil {
+			lg.Error(err, "error updating instance finalizers")
+			return ctrl.Result{}, returnWrappedError("error updating instance finalizers", err)
+		}
+		return ctrl.Result{}, nil
+	}
+
+	if !contains(instance.GetFinalizers(), exchangerateAppFinalizer) {
+		// TODO add finalizer
+	}
+
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ExchangeRateAppReconciler) isMarkedToBeDeleted(instance *v1alpha1.ExchangeRateApp) bool {
+	if instance.GetDeletionTimestamp() == nil {
+		return false
+	}
+
+	return contains(instance.GetFinalizers(), exchangerateAppFinalizer)
+}
+
+func contains(l []string, s string) bool {
+	for _, v := range l {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func returnWrappedError(msg string, err error) error {
+	return fmt.Errorf(msg + ": %w", err)
 }
 
 // SetupWithManager sets up the controller with the Manager.
