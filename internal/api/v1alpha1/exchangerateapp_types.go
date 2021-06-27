@@ -25,20 +25,14 @@ import (
 
 // ExchangeRateAppSpec defines the desired state of ExchangeRateApp
 type ExchangeRateAppSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	URL          string `json:"url"`
-	APIVersion   string `json:"api_version"`
-	APIAccessKey string `json:"api_access_key"`
+	CPU    string `json:"cpu"`
+	Memory string `json:"memory"`
 }
 
 // ExchangeRateAppStatus defines the observed state of ExchangeRateApp
 type ExchangeRateAppStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	Nodes []string `json:"nodes"`
+	Nodes  []string `json:"nodes"`
+	Status string   `json:"status"`
 }
 
 //+kubebuilder:object:root=true

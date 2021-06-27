@@ -2,6 +2,7 @@ apiVersion: app.ervitis.nazobenkyo.dev/v1alpha1
 kind: ExchangeRateApp
 metadata:
   name: exchangerateapp-sample
+  namespace: exchangerateapp
 spec:
-  # Add fields here
-  foo: bar
+  cpu: "40m"
+  memory: "50M"
