@@ -38,11 +38,18 @@ spec:
             properties:
               cpu:
                 type: string
+              image:
+                type: string
               memory:
                 type: string
+              replicas:
+                format: int32
+                type: integer
             required:
             - cpu
+            - image
             - memory
+            - replicas
             type: object
           status:
             description: ExchangeRateAppStatus defines the observed state of ExchangeRateApp

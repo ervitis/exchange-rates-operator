@@ -25,8 +25,10 @@ import (
 
 // ExchangeRateAppSpec defines the desired state of ExchangeRateApp
 type ExchangeRateAppSpec struct {
-	CPU    string `json:"cpu"`
-	Memory string `json:"memory"`
+	CPU      string `json:"cpu"`
+	Memory   string `json:"memory"`
+	Image    string `json:"image"`
+	Replicas int32  `json:"replicas"`
 }
 
 // ExchangeRateAppStatus defines the observed state of ExchangeRateApp

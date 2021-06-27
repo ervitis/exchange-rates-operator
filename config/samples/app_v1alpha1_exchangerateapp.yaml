@@ -6,3 +6,5 @@ metadata:
 spec:
   cpu: "40m"
   memory: "50M"
+  image: docker.io/ervitis/exchangerateapp:latest
+  replicas: 1
