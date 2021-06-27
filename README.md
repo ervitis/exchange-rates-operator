@@ -6,9 +6,12 @@ An operator using the exchange rates api
 
 ## DOING
 
-- Define API for exchange rates api
-- Define ENV for exchange rates api
+- Reconciler controller for the operator
+- Logs to see state
 
 ## TODO
 
 - Run operator inside localhost cluster (minikube)
+- Modify status table when describe manifest
+- Attach db
+- Define ENV for exchange rates api
