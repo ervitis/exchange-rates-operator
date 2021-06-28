@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -108,7 +109,10 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	r.log.Info("searching deployment")
 	if err := r.Get(ctx, instanceType, foundDeployment); err != nil {
 		if errors.IsNotFound(err) {
-			newDeployment := r.createDeployment(instance)
+			newDeployment, err := r.createDeployment(instance)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 			if err := r.Create(ctx, newDeployment); err != nil {
 				r.log.Error(err, "error creating deployment, not requeue")
 				return ctrl.Result{}, err
@@ -120,7 +124,10 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// check the deployment spec if it's found to match the status when reconciling
-	newDeployment := r.createDeployment(instance)
+	newDeployment, err := r.createDeployment(instance)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	if !equality.Semantic.DeepDerivative(foundDeployment, newDeployment) {
 		foundDeployment = newDeployment
 		r.log.Info("the deployments are not equal, so we reconcile it and update the status")
@@ -180,18 +187,18 @@ func (r *ExchangeRateAppReconciler) finalizeExchangeRateApp(_ context.Context, _
 	return nil
 }
 
-func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.ExchangeRateApp) *appsv1.Deployment {
+func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.ExchangeRateApp) (*appsv1.Deployment, error) {
 	r.log.Info("Creating deployment in namespace", "namespace", instance.GetNamespace())
 
 	reqCpu, err := resource.ParseQuantity(instance.Spec.CPU)
 	if err != nil {
 		r.log.Error(err, "error assign cpu from spec, check format")
-		return nil
+		return nil, err
 	}
 	reqMem, err := resource.ParseQuantity(instance.Spec.Memory)
 	if err != nil {
 		r.log.Error(err, "error assign memory form spec, check format")
-		return nil
+		return nil, err
 	}
 
 	deployment := &appsv1.Deployment{
@@ -216,22 +223,22 @@ func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.Exchange
 							Image: instance.Spec.Image,
 							Ports: []v1.ContainerPort{
 								{
-									Name:          fmt.Sprintf("%s-port", AppName),
-									ContainerPort: 8080,
+									Name:          "app-port",
+									ContainerPort: 8181,
 								},
 							},
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
-									v1.ResourceRequestsCPU:    reqCpu,
-									v1.ResourceRequestsMemory: reqMem,
+									"cpu":    reqCpu,
+									"memory": reqMem,
 								},
 							},
 							LivenessProbe: &v1.Probe{
 								Handler: v1.Handler{
 									HTTPGet: &v1.HTTPGetAction{
 										Path:   "/health",
-										Port:   intstr.FromInt(8080),
-										Scheme: "http",
+										Port:   intstr.FromInt(8181),
+										Scheme: "HTTP",
 									},
 								},
 								InitialDelaySeconds: 10,
@@ -250,9 +257,9 @@ func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.Exchange
 
 	if err := ctrl.SetControllerReference(instance, deployment, r.Scheme); err != nil {
 		r.log.Error(err, "when setting the controller reference for instance")
-		return nil
+		return nil, err
 	}
-	return deployment
+	return deployment, nil
 }
 
 func (r *ExchangeRateAppReconciler) isMarkedToBeDeleted(instance *v1alpha1.ExchangeRateApp) bool {
@@ -287,5 +294,6 @@ func (r *ExchangeRateAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ExchangeRateApp{}).
 		Owns(&appsv1.Deployment{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
 }

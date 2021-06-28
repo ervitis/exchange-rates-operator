@@ -4,7 +4,7 @@ metadata:
   name: exchangerateapp-sample
   namespace: exchangerateapp
 spec:
-  cpu: "40m"
-  memory: "50M"
+  cpu: "20m"
+  memory: "50Mi"
   image: docker.io/ervitis/exchangerateapp:latest
   replicas: 1
