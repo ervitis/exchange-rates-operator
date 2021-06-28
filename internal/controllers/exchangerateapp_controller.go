@@ -23,11 +23,13 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"reflect"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,6 +54,8 @@ const (
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=exchangerateapps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=exchangerateapps/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=exchangerateapps/finalizers,verbs=update
+//+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=pods,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -65,8 +69,12 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	r.log = log.FromContext(ctx).WithName("exchangeRateApp")
 
 	instance := &v1alpha1.ExchangeRateApp{}
+	instanceType := types.NamespacedName{
+		Name:      req.Name,
+		Namespace: req.Namespace,
+	}
 
-	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, instance); err != nil {
+	if err := r.Get(ctx, instanceType, instance); err != nil {
 		if errors.IsNotFound(err) {
 			r.log.Info("instance not found")
 			return ctrl.Result{}, err
@@ -90,7 +98,62 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		// TODO add finalizer
 	}
 
-	// TODO set the deployment and update it to reconcile
+	foundDeployment := &appsv1.Deployment{}
+	r.log.Info("searching deployment")
+	if err := r.Get(ctx, instanceType, foundDeployment); err != nil {
+		if errors.IsNotFound(err) {
+			newDeployment := r.createDeployment(instance)
+			if err := r.Create(ctx, newDeployment); err != nil {
+				r.log.Error(err, "error creating deployment, not requeue")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
+		}
+		r.log.Error(err, "failed to get deployment")
+		return ctrl.Result{}, err
+	}
+
+	// check the deployment spec if it's found to match the status when reconciling
+	newDeployment := r.createDeployment(instance)
+	if !equality.Semantic.DeepDerivative(foundDeployment, newDeployment) {
+		foundDeployment = newDeployment
+		r.log.Info("the deployments are not equal, so we reconcile it and update the status")
+		if err := r.Update(ctx, foundDeployment); err != nil {
+			r.log.Error(err, "failed to update the deployment")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// check the size of the replicas
+	if *foundDeployment.Spec.Replicas != instance.Spec.Replicas {
+		foundDeployment.Spec.Replicas = &instance.Spec.Replicas
+		if err := r.Update(ctx, foundDeployment); err != nil {
+			r.log.Error(err, "error updating replicas size in the deployment")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+
+	// update the operator status
+	podList := &v1.PodList{}
+	listOpts := []client.ListOption{client.InNamespace(foundDeployment.Namespace), client.MatchingLabels(labels())}
+	if err := r.List(ctx, podList, listOpts...); err != nil {
+		r.log.Error(err, "failed to list pods")
+		return ctrl.Result{}, err
+	}
+	var podNames []string
+	for _, pod := range podList.Items {
+		podNames = append(podNames, pod.Name)
+	}
+	if !reflect.DeepEqual(podNames, instance.Status.Nodes) {
+		r.log.Info("updating pod names")
+		instance.Status.Nodes = podNames
+		if err := r.Status().Update(ctx, instance); err != nil {
+			r.log.Error(err, "error updating pod names in list")
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -137,16 +200,16 @@ func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.Exchange
 							},
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
-									v1.ResourceRequestsCPU: reqCpu,
+									v1.ResourceRequestsCPU:    reqCpu,
 									v1.ResourceRequestsMemory: reqMem,
 								},
 							},
-							LivenessProbe:   &v1.Probe{
-								Handler:             v1.Handler{
+							LivenessProbe: &v1.Probe{
+								Handler: v1.Handler{
 									HTTPGet: &v1.HTTPGetAction{
-										Path:        "/health",
-										Port:        intstr.FromInt(8080),
-										Scheme:      "http",
+										Path:   "/health",
+										Port:   intstr.FromInt(8080),
+										Scheme: "http",
 									},
 								},
 								InitialDelaySeconds: 10,
@@ -201,5 +264,6 @@ func returnWrappedError(msg string, err error) error {
 func (r *ExchangeRateAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ExchangeRateApp{}).
+		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }

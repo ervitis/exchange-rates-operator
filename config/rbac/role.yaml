@@ -9,6 +9,18 @@ rules:
 - apiGroups:
   - app.ervitis.nazobenkyo.dev
   resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - app.ervitis.nazobenkyo.dev
+  resources:
   - exchangerateapps
   verbs:
   - create
@@ -32,3 +44,11 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - app.ervitis.nazobenkyo.dev
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
