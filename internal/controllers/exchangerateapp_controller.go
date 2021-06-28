@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -84,9 +85,12 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	if r.isMarkedToBeDeleted(instance) {
-		// TODO finalize client
+		if err := r.finalizeExchangeRateApp(ctx, instance); err != nil {
+			r.log.Error(err, "error finalizing components")
+			return ctrl.Result{}, err
+		}
 
-		instance.SetFinalizers([]string{exchangerateAppFinalizer})
+		controllerutil.RemoveFinalizer(instance, exchangerateAppFinalizer)
 		if err := r.Update(ctx, instance); err != nil {
 			r.log.Error(err, "error updating instance finalizers")
 			return ctrl.Result{}, returnWrappedError("error updating instance finalizers", err)
@@ -95,7 +99,9 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	if !contains(instance.GetFinalizers(), exchangerateAppFinalizer) {
-		// TODO add finalizer
+		if err := r.addFinalizer(ctx, instance); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	foundDeployment := &appsv1.Deployment{}
@@ -156,6 +162,22 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ExchangeRateAppReconciler) addFinalizer(ctx context.Context, instance *v1alpha1.ExchangeRateApp) error {
+	r.log.Info("adding finalizers")
+	controllerutil.AddFinalizer(instance, exchangerateAppFinalizer)
+
+	if err := r.Update(ctx, instance); err != nil {
+		r.log.Error(err, "error adding finalizer and updating data")
+		return err
+	}
+	return nil
+}
+
+func (r *ExchangeRateAppReconciler) finalizeExchangeRateApp(_ context.Context, _ *v1alpha1.ExchangeRateApp) error {
+	r.log.Info("app finalized!")
+	return nil
 }
 
 func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.ExchangeRateApp) *appsv1.Deployment {
@@ -234,7 +256,7 @@ func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.Exchange
 }
 
 func (r *ExchangeRateAppReconciler) isMarkedToBeDeleted(instance *v1alpha1.ExchangeRateApp) bool {
-	if instance.GetDeletionTimestamp() == nil {
+	if instance.GetDeletionTimestamp().IsZero() {
 		return false
 	}
 
