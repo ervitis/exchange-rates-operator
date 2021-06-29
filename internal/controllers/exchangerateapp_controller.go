@@ -23,7 +23,6 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -128,7 +127,7 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if !equality.Semantic.DeepDerivative(foundDeployment, newDeployment) {
+	if r.isDeploymentImageDifferent(foundDeployment, newDeployment) {
 		foundDeployment = newDeployment
 		r.log.Info("the deployments are not equal, so we reconcile it and update the status")
 		if err := r.Update(ctx, foundDeployment); err != nil {
@@ -169,6 +168,23 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *ExchangeRateAppReconciler) isDeploymentImageDifferent(found, newDeployment *appsv1.Deployment) bool {
+	for _, curr := range found.Spec.Template.Spec.Containers {
+		for _, newDeploy := range newDeployment.Spec.Template.Spec.Containers {
+			if curr.Name == newDeploy.Name {
+				if curr.Image != newDeploy.Image {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (r *ExchangeRateAppReconciler) isDeploymentReady(instance *appsv1.Deployment) bool {
+	return instance.Status.ReadyReplicas == instance.Status.Replicas
 }
 
 func (r *ExchangeRateAppReconciler) addFinalizer(ctx context.Context, instance *v1alpha1.ExchangeRateApp) error {
