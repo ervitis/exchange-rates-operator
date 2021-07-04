@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"os"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -122,6 +123,15 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
+	if err := r.ensureSecret(ctx, instance); err != nil {
+		r.log.Error(err, "error reconciling element")
+		if statusErr := r.Status().Update(ctx, instance); statusErr != nil {
+			r.log.Error(err, "failed updating status")
+			return ctrl.Result{Requeue: true}, statusErr
+		}
+		return ctrl.Result{Requeue: true}, err
+	}
+
 	// check the deployment spec if it's found to match the status when reconciling
 	newDeployment, err := r.createDeployment(instance)
 	if err != nil {
@@ -198,7 +208,11 @@ func (r *ExchangeRateAppReconciler) addFinalizer(ctx context.Context, instance *
 	return nil
 }
 
-func (r *ExchangeRateAppReconciler) finalizeExchangeRateApp(_ context.Context, _ *v1alpha1.ExchangeRateApp) error {
+func (r *ExchangeRateAppReconciler) finalizeExchangeRateApp(ctx context.Context, instance *v1alpha1.ExchangeRateApp) error {
+	r.log.Info("finalizing")
+	if err := r.DeleteAllOf(ctx, instance); err != nil {
+		return fmt.Errorf("error deleting app: %w", err)
+	}
 	r.log.Info("app finalized!")
 	return nil
 }
@@ -262,6 +276,19 @@ func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.Exchange
 								PeriodSeconds:       3,
 							},
 							ImagePullPolicy: "Always",
+							Env: []v1.EnvVar{
+								{
+									Name: "API_KEY",
+									ValueFrom: &v1.EnvVarSource{
+										SecretKeyRef: &v1.SecretKeySelector{
+											LocalObjectReference: v1.LocalObjectReference{
+												Name: "exchange-app-secret",
+											},
+											Key: "API_KEY",
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -276,6 +303,50 @@ func (r *ExchangeRateAppReconciler) createDeployment(instance *v1alpha1.Exchange
 		return nil, err
 	}
 	return deployment, nil
+}
+
+func (r *ExchangeRateAppReconciler) ensureSecret(ctx context.Context, instance *v1alpha1.ExchangeRateApp) error {
+	secret, mutateFn, err := r.createSecret(instance)
+
+	result, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, mutateFn)
+	if err != nil {
+		return fmt.Errorf("error creating or updating secret: %w", err)
+	}
+	if result != controllerutil.OperationResultNone {
+		r.log.Info("api key created or updated")
+	}
+	return nil
+}
+
+func (r *ExchangeRateAppReconciler) createSecret(instance *v1alpha1.ExchangeRateApp) (*v1.Secret, controllerutil.MutateFn, error) {
+	secret := &v1.Secret{
+		Type: v1.SecretTypeOpaque,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "exchange-app-secret",
+			Namespace: instance.GetNamespace(),
+			Labels:    labels(),
+		},
+	}
+
+	mutateFn := func() error {
+		if err := controllerutil.SetControllerReference(instance, secret, r.Scheme); err != nil {
+			return err
+		}
+		_, exists := secret.Data["API_KEY"]
+		if !exists {
+			key := os.Getenv("API_KEY")
+			if key == "" {
+				return fmt.Errorf("API_KEY env var missing")
+			}
+			if secret.Data == nil {
+				secret.Data = map[string][]byte{
+					"API_KEY": []byte(key),
+				}
+			}
+		}
+		return nil
+	}
+	return secret, mutateFn, nil
 }
 
 func (r *ExchangeRateAppReconciler) isMarkedToBeDeleted(instance *v1alpha1.ExchangeRateApp) bool {
@@ -310,6 +381,7 @@ func (r *ExchangeRateAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ExchangeRateApp{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&v1.Secret{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)
 }
