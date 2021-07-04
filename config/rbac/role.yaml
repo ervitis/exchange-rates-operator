@@ -52,3 +52,27 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - app.ervitis.nazobenkyo.dev
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - app.ervitis.nazobenkyo.dev
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
