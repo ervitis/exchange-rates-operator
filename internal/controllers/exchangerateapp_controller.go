@@ -56,6 +56,8 @@ const (
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=exchangerateapps/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=exchangerateapps/finalizers,verbs=update
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=app.ervitis.nazobenkyo.dev,resources=pods,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
