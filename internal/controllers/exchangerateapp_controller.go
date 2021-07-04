@@ -26,16 +26,15 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"os"
 	"reflect"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -123,13 +122,18 @@ func (r *ExchangeRateAppReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensureSecret(ctx, instance); err != nil {
-		r.log.Error(err, "error reconciling element")
-		if statusErr := r.Status().Update(ctx, instance); statusErr != nil {
-			r.log.Error(err, "failed updating status")
-			return ctrl.Result{Requeue: true}, statusErr
+	for _, f := range []func(context.Context, *v1alpha1.ExchangeRateApp) error{
+		r.ensureService,
+		r.ensureSecret,
+	} {
+		if err := f(ctx, instance); err != nil {
+			r.log.Error(err, "error reconciling element")
+			if statusErr := r.Status().Update(ctx, instance); statusErr != nil {
+				r.log.Error(err, "failed updating status")
+				return ctrl.Result{Requeue: true}, statusErr
+			}
+			return ctrl.Result{Requeue: true}, err
 		}
-		return ctrl.Result{Requeue: true}, err
 	}
 
 	// check the deployment spec if it's found to match the status when reconciling
@@ -214,6 +218,54 @@ func (r *ExchangeRateAppReconciler) finalizeExchangeRateApp(ctx context.Context,
 		return fmt.Errorf("error deleting app: %w", err)
 	}
 	r.log.Info("app finalized!")
+	return nil
+}
+
+func (r *ExchangeRateAppReconciler) createService(instance *v1alpha1.ExchangeRateApp) (*v1.Service, controllerutil.MutateFn) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      AppName,
+			Labels:    labels(),
+			Namespace: instance.GetNamespace(),
+		},
+		Spec: v1.ServiceSpec{
+			Selector: labels(),
+			Type:     v1.ServiceTypeClusterIP,
+		},
+	}
+
+	mutateFn := func() error {
+		if err := controllerutil.SetControllerReference(instance, svc, r.Scheme); err != nil {
+			return err
+		}
+		if svc.ObjectMeta.Annotations == nil {
+			svc.ObjectMeta.Annotations = labels()
+		}
+		if len(svc.Spec.Ports) == 0 {
+			svc.Spec.Ports = make([]v1.ServicePort, 1)
+		}
+		svcPort := v1.ServicePort{
+			Name:       "exchange-app-svc",
+			Protocol:   v1.ProtocolTCP,
+			Port:       8080,
+			TargetPort: intstr.FromInt(8181),
+		}
+		svc.Spec.Ports[0] = svcPort
+		return nil
+	}
+	return svc, mutateFn
+}
+
+func (r *ExchangeRateAppReconciler) ensureService(ctx context.Context, instance *v1alpha1.ExchangeRateApp) error {
+	svc, mutateFn := r.createService(instance)
+
+	result, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, mutateFn)
+	if err != nil {
+		return fmt.Errorf("error creating or updating secret: %w", err)
+	}
+	if result != controllerutil.OperationResultNone {
+		r.log.Info("api key created or updated")
+	}
 	return nil
 }
 
@@ -381,6 +433,7 @@ func (r *ExchangeRateAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ExchangeRateApp{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&v1.Service{}).
 		Owns(&v1.Secret{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Complete(r)

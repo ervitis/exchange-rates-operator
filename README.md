@@ -9,13 +9,14 @@ An operator using the exchange rates api. This operator uses the following image
 - Logs to see state
 - Modify status table when describe pod status
 - Define ENV for exchange rates api: configmap or secret
+- Create service
 
 ## DOING
 
-- Create service
+- Attach db (optional) to the app and use CRUD operations
 
 ## TODO
 
-- Attach db (optional)
+- Update to daemonSet
 - Create ingress
 - Create volume for the secrets
